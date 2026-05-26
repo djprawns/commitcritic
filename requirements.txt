@@ -1,0 +1,18 @@
+# LLM & AI
+openai>=1.0.0
+
+# Git operations
+gitpython>=3.1.0
+
+# CLI framework
+typer>=0.9.0
+
+# Beautiful terminal output
+rich>=13.0.0
+
+# Data validation & models
+pydantic>=2.0.0
+
+# Environment variable management
+python-dotenv>=1.0.0
+
