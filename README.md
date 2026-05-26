@@ -27,9 +27,9 @@ CommitCritic uses OpenAI's GPT models to review your Git commit history, score e
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
-│                            CLI Layer                                     │
+│                            CLI Layer                                    │
 │                      (commit_critic.py)                                 │
-│                                                                          │
+│                                                                         │
 │    ┌──────────────────┐              ┌──────────────────┐               │
 │    │  analyze command │              │  write command   │               │
 │    └────────┬─────────┘              └────────┬─────────┘               │
@@ -37,25 +37,25 @@ CommitCritic uses OpenAI's GPT models to review your Git commit history, score e
               │                                │
               ▼                                ▼
 ┌─────────────────────────────────────────────────────────────────────────┐
-│                           Git Module                                     │
-│                                                                          │
-│  ┌─────────────┐    ┌─────────────┐    ┌─────────────┐                 │
-│  │ Repository  │    │   Commit    │    │    Diff     │                 │
-│  │  - clone    │    │  - sha      │    │  - staged   │                 │
-│  │  - open     │    │  - message  │    │  - stats    │                 │
-│  │  - commits  │    │  - author   │    │  - execute  │                 │
-│  └─────────────┘    └─────────────┘    └─────────────┘                 │
+│                           Git Module                                    │
+│                                                                         │
+│  ┌─────────────┐    ┌─────────────┐    ┌─────────────┐                  │
+│  │ Repository  │    │   Commit    │    │    Diff     │                  │
+│  │  - clone    │    │  - sha      │    │  - staged   │                  │
+│  │  - open     │    │  - message  │    │  - stats    │                  │
+│  │  - commits  │    │  - author   │    │  - execute  │                  │
+│  └─────────────┘    └─────────────┘    └─────────────┘                  │
 └─────────────────────────────────────────────────────────────────────────┘
               │                                │
               ▼                                ▼
 ┌─────────────────────────────────────────────────────────────────────────┐
-│                          AI Agents                                       │
-│                                                                          │
+│                          AI Agents                                      │
+│                                                                         │
 │  ┌────────────────────────────────────────────────────────────────┐     │
-│  │                      BaseAgent                                  │     │
+│  │                      BaseAgent                                 │     │
 │  │              (OpenAI client, JSON responses)                   │     │
 │  └────────────────────────┬───────────────────────────────────────┘     │
-│                           │                                              │
+│                           │                                             │
 │           ┌───────────────┴───────────────┐                             │
 │           ▼                               ▼                             │
 │  ┌─────────────────┐            ┌─────────────────┐                     │
@@ -69,9 +69,9 @@ CommitCritic uses OpenAI's GPT models to review your Git commit history, score e
               │                                │
               ▼                                ▼
 ┌─────────────────────────────────────────────────────────────────────────┐
-│                        Rich Terminal Output                              │
-│                                                                          │
-│   💩 Bad Commits    💎 Good Commits    📊 Statistics    ┏━━ Panels ━━┓  │
+│                        Rich Terminal Output                             │
+│                                                                         │
+│   💩 Bad Commits    💎 Good Commits    📊 Statistics  ┏━━ Panels ━━┓    │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
