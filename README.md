@@ -71,7 +71,7 @@ CommitCritic uses OpenAI's GPT models to review your Git commit history, score e
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                        Rich Terminal Output                             │
 │                                                                         │
-│   💩 Bad Commits    💎 Good Commits    📊 Statistics  ┏━━ Panels ━━┓    │
+│  [BAD] Bad Commits  [GEM] Good Commits  [STAT] Statistics  ┏━━Panels━━┓ │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
