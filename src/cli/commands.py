@@ -7,8 +7,22 @@ from typing import Optional
 import typer
 from rich.console import Console
 from rich.panel import Panel
+from git.exc import InvalidGitRepositoryError, GitCommandError
 
 from src.config import settings
+from src.git import GitRepository, get_staged_diff
+from src.git.diff import execute_commit
+from src.agents import CommitWriterAgent, CommitAnalyzerAgent
+from src.cli.formatter import (
+    format_staged_summary,
+    format_commit_suggestion,
+    format_no_staged_changes,
+    format_commit_success,
+    format_commit_cancelled,
+    format_analysis_report,
+    format_progress,
+    format_error,
+)
 
 # Initialize Typer app and Rich console
 app = typer.Typer(
@@ -70,20 +84,52 @@ def analyze(
     # Use default limit from settings if not provided
     commit_limit = limit or settings.default_commit_limit
 
-    if url:
-        console.print(f"\n[bold blue]🔍 Analyzing remote repository:[/bold blue] {url}")
-    else:
-        console.print("\n[bold blue]🔍 Analyzing current repository...[/bold blue]")
+    try:
+        # Open or clone repository
+        if url:
+            console.print(f"\n[bold blue]🔍 Cloning remote repository:[/bold blue] {url}")
+            console.print("[dim]This may take a moment...[/dim]\n")
+            repo = GitRepository.clone_remote(url)
+        else:
+            console.print("\n[bold blue]🔍 Analyzing current repository...[/bold blue]")
+            repo = GitRepository.open_local()
 
-    console.print(f"[dim]Fetching last {commit_limit} commits...[/dim]\n")
+        with repo:
+            console.print(f"[dim]Fetching last {commit_limit} commits from {repo.name}...[/dim]\n")
 
-    # TODO: Implement analysis logic
-    # 1. Open/clone repository
-    # 2. Fetch commits
-    # 3. Batch analyze with LLM
-    # 4. Format and display results
+            # Fetch commits
+            commits = repo.get_commits(limit=commit_limit)
 
-    console.print("[yellow]⚠️ Analysis mode not yet implemented[/yellow]")
+            if not commits:
+                console.print("[yellow]No commits found in this repository.[/yellow]")
+                raise typer.Exit(code=0)
+
+            console.print(f"[dim]Analyzing {len(commits)} commits...[/dim]\n")
+
+            # Analyze with LLM
+            analyzer = CommitAnalyzerAgent()
+            report = analyzer.create_report(
+                repository_name=repo.name,
+                commits=commits,
+                batch_size=settings.batch_size,
+                progress_callback=format_progress,
+            )
+
+            # Clear progress line
+            console.print(" " * 50, end="\r")
+
+            # Display results
+            format_analysis_report(report)
+
+    except InvalidGitRepositoryError:
+        format_error("Not a Git repository. Please run this command from within a Git repository.")
+        raise typer.Exit(code=1)
+    except GitCommandError as e:
+        format_error(f"Git error: {e}")
+        raise typer.Exit(code=1)
+    except Exception as e:
+        format_error(f"Unexpected error: {e}")
+        raise typer.Exit(code=1)
 
 
 @app.command()
@@ -102,16 +148,53 @@ def write() -> None:
         raise typer.Exit(code=1)
 
     console.print("\n[bold blue]✍️ Interactive Commit Writer[/bold blue]")
-    console.print("[dim]Analyzing staged changes...[/dim]\n")
 
-    # TODO: Implement write logic
-    # 1. Get staged diff
-    # 2. Analyze changes with LLM
-    # 3. Generate commit message suggestion
-    # 4. Interactive prompt for user acceptance
-    # 5. Execute git commit
+    try:
+        # Get staged changes
+        staged = get_staged_diff()
 
-    console.print("[yellow]⚠️ Write mode not yet implemented[/yellow]")
+        if not staged.has_changes:
+            format_no_staged_changes()
+            raise typer.Exit(code=0)
+
+        # Analyze changes and generate suggestion
+        writer = CommitWriterAgent()
+        summary, suggestion = writer.generate_suggestion(staged)
+
+        # Display summary and suggestion
+        format_staged_summary(summary)
+        format_commit_suggestion(suggestion)
+
+        # Interactive prompt
+        console.print("\n[dim]Press Enter to accept, or type your own message (empty to cancel):[/dim]")
+        user_input = console.input("[bold green]> [/bold green]").strip()
+
+        if user_input == "":
+            # User pressed Enter - accept suggestion
+            message = suggestion.full_message
+        elif user_input.lower() in ("q", "quit", "exit", "cancel"):
+            format_commit_cancelled()
+            raise typer.Exit(code=0)
+        else:
+            # User provided their own message
+            message = user_input
+
+        # Execute the commit
+        sha = execute_commit(message)
+        format_commit_success(sha, message)
+
+    except InvalidGitRepositoryError:
+        format_error("Not a Git repository. Please run this command from within a Git repository.")
+        raise typer.Exit(code=1)
+    except GitCommandError as e:
+        format_error(f"Git error: {e}")
+        raise typer.Exit(code=1)
+    except KeyboardInterrupt:
+        format_commit_cancelled()
+        raise typer.Exit(code=0)
+    except Exception as e:
+        format_error(f"Unexpected error: {e}")
+        raise typer.Exit(code=1)
 
 
 @app.callback(invoke_without_command=True)

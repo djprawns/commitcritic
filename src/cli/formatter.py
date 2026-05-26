@@ -5,7 +5,6 @@ Rich terminal output formatting for CommitCritic.
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
-from rich.text import Text
 from rich import box
 
 from src.models.suggestion import CommitSuggestion, ChangeSummary
