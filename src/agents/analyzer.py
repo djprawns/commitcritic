@@ -1,6 +1,10 @@
 """
 CommitAnalyzerAgent - Analyzes and scores commit messages.
+Supports parallel batch processing for faster analysis.
 """
+
+import asyncio
+from typing import Callable
 
 from src.models.analysis import CommitAnalysis, AnalysisReport
 from src.git.commit import Commit
@@ -12,11 +16,12 @@ from .prompts.analyzer import SYSTEM_PROMPT, BATCH_ANALYZE_PROMPT
 class CommitAnalyzerAgent(BaseAgent):
     """
     Agent that analyzes commit messages and provides scores and feedback.
+    Supports both sequential and parallel batch processing.
     """
 
     def analyze_batch(self, commits: list[Commit]) -> list[CommitAnalysis]:
         """
-        Analyze a batch of commits.
+        Analyze a batch of commits (sync).
 
         Args:
             commits: List of Commit objects to analyze
@@ -36,6 +41,34 @@ class CommitAnalyzerAgent(BaseAgent):
 
         response = self._chat_json(SYSTEM_PROMPT, prompt, max_tokens=2048)
 
+        return self._parse_response(response, commits)
+
+    async def analyze_batch_async(self, commits: list[Commit]) -> list[CommitAnalysis]:
+        """
+        Analyze a batch of commits (async).
+
+        Args:
+            commits: List of Commit objects to analyze
+
+        Returns:
+            List of CommitAnalysis results
+        """
+        if not commits:
+            return []
+
+        # Format commits for the prompt
+        commits_text = "\n".join(
+            f"[{c.short_sha}] {c.message}" for c in commits
+        )
+
+        prompt = BATCH_ANALYZE_PROMPT.format(commits=commits_text)
+
+        response = await self._chat_json_async(SYSTEM_PROMPT, prompt, max_tokens=2048)
+
+        return self._parse_response(response, commits)
+
+    def _parse_response(self, response: dict, commits: list[Commit]) -> list[CommitAnalysis]:
+        """Parse LLM response into CommitAnalysis objects."""
         analyses = []
         for item in response.get("analyses", []):
             analysis = CommitAnalysis(
@@ -47,17 +80,16 @@ class CommitAnalyzerAgent(BaseAgent):
                 praise=item.get("praise"),
             )
             analyses.append(analysis)
-
         return analyses
 
     def analyze_all(
         self,
         commits: list[Commit],
         batch_size: int = 10,
-        progress_callback=None,
+        progress_callback: Callable[[int, int], None] | None = None,
     ) -> list[CommitAnalysis]:
         """
-        Analyze all commits in batches.
+        Analyze all commits in batches (sequential - legacy method).
 
         Args:
             commits: List of all commits to analyze
@@ -80,12 +112,70 @@ class CommitAnalyzerAgent(BaseAgent):
 
         return all_analyses
 
+    async def analyze_all_parallel(
+        self,
+        commits: list[Commit],
+        batch_size: int = 10,
+        max_concurrent: int = 5,
+        progress_callback: Callable[[int, int], None] | None = None,
+    ) -> list[CommitAnalysis]:
+        """
+        Analyze all commits in batches (parallel).
+
+        Args:
+            commits: List of all commits to analyze
+            batch_size: Number of commits per LLM call
+            max_concurrent: Maximum number of concurrent API calls
+            progress_callback: Optional callback(current, total) for progress updates
+
+        Returns:
+            List of all CommitAnalysis results
+        """
+        total = len(commits)
+
+        # Create batches
+        batches = []
+        for i in range(0, total, batch_size):
+            batches.append(commits[i:i + batch_size])
+
+        # Semaphore to limit concurrent requests
+        semaphore = asyncio.Semaphore(max_concurrent)
+        completed = 0
+
+        async def process_batch(batch: list[Commit], batch_index: int) -> tuple[int, list[CommitAnalysis]]:
+            nonlocal completed
+            async with semaphore:
+                result = await self.analyze_batch_async(batch)
+                completed += len(batch)
+                if progress_callback:
+                    progress_callback(completed, total)
+                return batch_index, result
+
+        # Run all batches in parallel (limited by semaphore)
+        tasks = [
+            process_batch(batch, i)
+            for i, batch in enumerate(batches)
+        ]
+        results = await asyncio.gather(*tasks)
+
+        # Sort by batch index to maintain order
+        results.sort(key=lambda x: x[0])
+
+        # Flatten results
+        all_analyses = []
+        for _, analyses in results:
+            all_analyses.extend(analyses)
+
+        return all_analyses
+
     def create_report(
         self,
         repository_name: str,
         commits: list[Commit],
         batch_size: int = 10,
-        progress_callback=None,
+        progress_callback: Callable[[int, int], None] | None = None,
+        parallel: bool = True,
+        max_concurrent: int = 5,
     ) -> AnalysisReport:
         """
         Create a complete analysis report for a repository.
@@ -95,11 +185,25 @@ class CommitAnalyzerAgent(BaseAgent):
             commits: List of commits to analyze
             batch_size: Number of commits per LLM call
             progress_callback: Optional callback for progress updates
+            parallel: Use parallel processing (default: True)
+            max_concurrent: Max concurrent API calls when parallel=True
 
         Returns:
             AnalysisReport with all analyses and statistics
         """
-        analyses = self.analyze_all(commits, batch_size, progress_callback)
+        if parallel and len(commits) > batch_size:
+            # Use parallel processing for multiple batches
+            analyses = asyncio.run(
+                self.analyze_all_parallel(
+                    commits,
+                    batch_size,
+                    max_concurrent,
+                    progress_callback
+                )
+            )
+        else:
+            # Use sequential for single batch or when parallel=False
+            analyses = self.analyze_all(commits, batch_size, progress_callback)
 
         return AnalysisReport(
             repository_name=repository_name,
