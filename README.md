@@ -114,6 +114,41 @@ cp .env.example .env
 | `rich` | Beautiful terminal output |
 | `pydantic` | Data validation |
 | `python-dotenv` | Environment variable management |
+| `pytest` | Testing framework |
+| `pytest-asyncio` | Async test support |
+
+---
+
+## 🧪 Testing
+
+Run the test suite:
+
+```bash
+# Run all tests
+pytest
+
+# Run with verbose output
+pytest -v
+
+# Run specific test file
+pytest tests/test_models.py
+
+# Run specific test class
+pytest tests/test_agents.py::TestCommitAnalyzerAgent
+
+# Run with coverage (install pytest-cov first)
+pytest --cov=src --cov-report=html
+```
+
+### Test Structure
+
+| File | Tests |
+|------|-------|
+| `tests/test_models.py` | Data model tests (CommitAnalysis, AnalysisReport, CommitSuggestion) |
+| `tests/test_git.py` | Git module tests (Commit, StagedChanges) |
+| `tests/test_agents.py` | AI agent tests with mocked OpenAI API |
+| `tests/test_cli.py` | CLI command tests |
+| `tests/test_config.py` | Configuration tests |
 
 ---
 
